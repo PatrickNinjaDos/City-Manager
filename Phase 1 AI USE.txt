@@ -1,0 +1,73 @@
+# AI Usage Documentation – Phase 1
+
+## Tool Used
+Claude (claude.ai)
+
+## What I Asked
+
+### 1. parse_condition function
+I described the Report struct and the `field:operator:value` format and asked for a
+function that splits a condition string into its three components.
+
+**Prompt (paraphrased):**
+"I have a condition string like `severity:>=:2`. Write a function
+`int parse_condition(const char *input, char *field, char *op, char *value)`
+that splits it into field, operator and value."
+
+**Generated output:**
+The function used `strchr` to find the first and second `:` delimiter and
+copied the substrings manually using `strncpy`.
+
+**What I changed:**
+Nothing structural. I verified it handles operators like `>=` and `<=` correctly
+since they contain no `:` — confirmed it works.
+
+---
+
+### 2. match_condition function
+I described the Report struct fields and their C types and asked for a matching function.
+
+**Prompt (paraphrased):**
+"Given this struct with fields severity (uint32_t), category (char[]),
+inspector_name (char[]), timestamp (time_t), write
+`int match_condition(Report *r, const char *field, const char *op, const char *value)`
+that returns 1 if the record matches."
+
+**Generated output:**
+The function handled all four fields with all six operators. Numeric fields
+used `atoi`/`atol` for conversion, string fields used `strcmp`.
+
+**What I changed:**
+I added a cast from `uint32_t` to `int` for severity comparison to avoid
+unsigned comparison issues with `<` and `>`.
+
+---
+
+## What I Wrote Myself
+- The full `filter_reports` function: opening the file, reading records with
+  `read()`, calling `parse_condition` and `match_condition`, printing results
+- Multi-condition AND logic with the conditions array in the Arguments struct
+- The fix for collecting multiple condition arguments in `parse_arguments`
+- All other functions: `add_report`, `list_reports`, `view_report`,
+  `remove_report`, `update_threshold`, `get_next_report_id`
+- Permission checking logic with `stat()` and `chmod()`
+- Symlink creation with `symlink()` and `lstat()` checks
+
+---
+
+## What the AI Got Wrong / What I Had to Fix
+- Initial single `condition` field in the struct only captured the first
+  condition argument. Multi-condition filtering silently ignored the rest.
+  I restructured the struct to use a `conditions[10][64]` array and updated
+  `parse_arguments` to collect all condition tokens.
+- The AI assumed conditions would always be well-formed. I added a check
+  that prints a diagnostic and skips the record if `parse_condition` returns 0.
+
+---
+
+## What I Learned
+- How `strchr` can be used to tokenize without modifying the original string
+- That unsigned integer comparisons with signed values can produce wrong
+  results — explicit casting matters
+- The importance of testing multi-argument parsing separately from the
+  matching logic; the bug was in argument collection, not in the AI functions
