@@ -7,7 +7,9 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/stat.h>
+#include <sys/stat.h> 
+#include <sys/types.h>
+#include <sys/wait.h>
 
 typedef struct arguments {
     char role[20];
@@ -212,6 +214,11 @@ void parse_arguments(int argc,char *argv[]) {
             }
             op_set = true;
         }
+        else if (strcmp(argv[i], "--remove_district") == 0 && i + 1 < argc) {
+            strcpy(Arguments.operation, argv[i]);
+            strcpy(Arguments.district_id, argv[++i]);
+            op_set = true;
+        }
     }
 
     if (role_set==false || user_set==false || op_set==false){
@@ -252,7 +259,7 @@ void add_report(const char *district_id, const char *username) {
     //cream directorul districtului daca nu exista
     struct stat st_dir;
     if (stat(district_id, &st_dir) == -1) {
-        if (mkdir(district_id, 0750) == -1) {
+        if (mkdir(district_id) == -1) {
             perror("Eroare la crearea directorului districtului");
             return;
         }
@@ -319,6 +326,60 @@ void add_report(const char *district_id, const char *username) {
     log_action(district_id, Arguments.username, Arguments.role, "add");
 
     create_symlink(district_id);
+}
+
+void remove_district(const char *district_id, const char *username)
+{
+    //verificam daca e manager
+    if (strcmp(Arguments.role, "manager") != 0) {
+        printf("permisiune refuzata. doar managerul poate sterge districte.\n");
+        return;
+    }
+
+    //verificam daca directorul exista
+    struct stat st;
+    if (stat(district_id, &st) != 0) {
+        printf("districtul %s nu exista.\n", district_id);
+        return;
+    }
+
+    //cream child process care ruleaza rm -rf
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("eroare la fork");
+        return;
+    }
+
+    if (pid == 0) {
+        // suntem in child process
+        // execvp inlocuieste child-ul cu comanda rm
+        char *args[] = {"rm", "-rf", (char *)district_id, NULL};
+        execvp("rm", args);
+        // daca ajungem aici execvp a esuat
+        perror("eroare la execvp");
+        exit(1);
+    }
+
+    //suntem in parent process, asteptam sa termine child-ul
+    int status;
+    waitpid(pid, &status, 0);
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        printf("districtul %s a fost sters.\n", district_id);
+    } else {
+        printf("eroare la stergerea districtului %s.\n", district_id);
+        return;
+    }
+
+    // stergem si symlink-ul corespunzator
+    char link_name[64];
+    sprintf(link_name, "active_reports-%s", district_id);
+
+    struct stat lst;
+    if (lstat(link_name, &lst) == 0) {
+        unlink(link_name);
+        printf("symlink %s sters.\n", link_name);
+    }
 }
 
 void list_reports(const char *district_id) {
@@ -599,6 +660,9 @@ int main(int argc,char *argv[])
     }
     else if (is_operation(Arguments.operation, "filter")) {
         filter_reports(Arguments.district_id);
+    }
+    else if (is_operation(Arguments.operation, "remove_district")) {
+        remove_district(Arguments.district_id, Arguments.username);
     }
     return 0;
 }
