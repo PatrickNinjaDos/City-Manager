@@ -259,7 +259,7 @@ void add_report(const char *district_id, const char *username) {
     //cream directorul districtului daca nu exista
     struct stat st_dir;
     if (stat(district_id, &st_dir) == -1) {
-        if (mkdir(district_id) == -1) {
+        if (mkdir(district_id,0750) == -1) {
             perror("Eroare la crearea directorului districtului");
             return;
         }
@@ -326,6 +326,33 @@ void add_report(const char *district_id, const char *username) {
     log_action(district_id, Arguments.username, Arguments.role, "add");
 
     create_symlink(district_id);
+
+    //trimitem semnal catre monitor daca exista
+    //deschidem .monitor_pid si citim pid-ul
+    int pid_fd = open(".monitor_pid", O_RDONLY);
+    if (pid_fd < 0) {
+        //fisierul nu exista, monitorul nu ruleaza
+        log_action(district_id, username, Arguments.role, "add - monitor negasit");
+    } else {
+        char pid_buf[32];
+        int n = read(pid_fd, pid_buf, sizeof(pid_buf) - 1);
+        close(pid_fd);
+
+        if (n <= 0) {
+            log_action(district_id, username, Arguments.role, "add - pid invalid in .monitor_pid");
+        } else {
+            pid_buf[n] = '\0';
+            pid_t monitor_pid = (pid_t)atoi(pid_buf);
+
+            //kill() cu SIGUSR1 notifica monitorul
+            if (kill(monitor_pid, SIGUSR1) == 0) {
+                log_action(district_id, username, Arguments.role, "add - monitor notificat");
+            } else {
+                //kill() a esuat — pid invalid sau procesul nu mai exista
+                log_action(district_id, username, Arguments.role, "add - notificarea monitorului a esuat");
+            }
+        }
+    }
 }
 
 void remove_district(const char *district_id, const char *username)
