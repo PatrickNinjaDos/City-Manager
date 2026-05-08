@@ -46,9 +46,23 @@ void delete_pid_file() {
 
 int main(void) 
 {
-    //setam handlerii pentru semnale
-    signal(SIGUSR1, handle_sigusr1);
-    signal(SIGINT , handle_sigint );
+    struct sigaction sa_usr1;
+    sa_usr1.sa_handler = handle_sigusr1;
+    sigemptyset(&sa_usr1.sa_mask);  
+    sa_usr1.sa_flags = 0;           
+    if (sigaction(SIGUSR1, &sa_usr1, NULL) == -1) {
+        perror("eroare sigaction SIGUSR1");
+        exit(1);
+    }
+ 
+    struct sigaction sa_int;
+    sa_int.sa_handler = handle_sigint;
+    sigemptyset(&sa_int.sa_mask);
+    sa_int.sa_flags = 0;
+    if (sigaction(SIGINT, &sa_int, NULL) == -1) {
+        perror("eroare sigaction SIGINT");
+        exit(1);
+    }
 
     //cream pid-file
     write_pid_file();
