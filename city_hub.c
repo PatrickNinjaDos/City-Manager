@@ -88,6 +88,34 @@ void run_hub_mon() {
     exit(0);
 }
 
+void cmd_start_monitor() {
+    // verificam daca hub_mon e deja activ
+    if (hub_mon_pid > 0) {
+        // verificam daca procesul exista inca
+        if (kill(hub_mon_pid, 0) == 0) {
+            printf("[hub] monitorul este deja pornit (hub_mon PID=%d).\n", hub_mon_pid);
+            return;
+        }
+    }
+ 
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("hub: fork hub_mon");
+        return;
+    }
+ 
+    if (pid == 0) {
+        // copil => hub_mon
+        run_hub_mon();
+        exit(0);
+    }
+ 
+    // parinte => retinem pid-ul hub_mon
+    hub_mon_pid = pid;
+    printf("[hub] hub_mon pornit cu PID=%d.\n", hub_mon_pid);
+}
+ 
+
 int main(void) {
     printf("=== city_hub ===\n");
     printf("Tasteaza 'help' pentru lista de comenzi.\n\n");
