@@ -34,6 +34,12 @@ int main(int argc, char *argv[])
     char filepath[128];
     snprintf(filepath, sizeof(filepath), "%s/reports.dat", argv[1]);
 
+    int fd = open(filepath, O_RDONLY);
+    if (fd < 0) {
+        fprintf(stderr, "eroare la deschidere%s\n", filepath);
+        return 1;
+    }
+
     InspectorScore scores[MAX_INSPECTORS] = {0};
     int num_inspectors = 0;
 
@@ -56,12 +62,6 @@ int main(int argc, char *argv[])
     }
 
     close(fd);
- 
-    int fd = open(filepath, O_RDONLY);
-    if (fd < 0) {
-        fprintf(stderr, "eroare la deschidere%s\n", filepath);
-        return 1;
-    }
  
     return 0;
 }
