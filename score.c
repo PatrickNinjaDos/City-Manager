@@ -5,6 +5,13 @@
 #include <time.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#define MAX_INSPECTORS 64
+
+typedef struct {
+    char name[32];
+    uint32_t total_severity;
+} InspectorScore;
  
 typedef struct {
     uint32_t report_id;
