@@ -31,13 +31,11 @@ pid_t read_monitor_pid()
 
 void run_hub_mon() {
     // pipe intre monitor si hub_mo
-    n
     int pipefd[2];
     if (pipe(pipefd) < 0) {
         perror("hub_mon: pipe");
         exit(1);
     }
- 
     pid_t mon_pid = fork();
     if (mon_pid < 0) {
         perror("hub_mon: fork monitor");
@@ -103,7 +101,6 @@ void cmd_start_monitor() {
         perror("hub: fork hub_mon");
         return;
     }
- 
     if (pid == 0) {
         // copil => hub_mon
         run_hub_mon();
@@ -114,10 +111,127 @@ void cmd_start_monitor() {
     hub_mon_pid = pid;
     printf("[hub] hub_mon pornit cu PID=%d.\n", hub_mon_pid);
 }
+
+void cmd_calculate_scores(char districts[][64], int count) {
+    if (count == 0) {
+        printf("[hub] niciun district specificat.\n");
+        return;
+    }
+
+    int pipes[MAX_DISTRICTS][2];
+    pid_t pids[MAX_DISTRICTS];
+
+    // pornim cate un scorer per district
+    for (int i = 0; i < count; i++) {
+        if (pipe(pipes[i]) < 0) {
+            perror("hub: pipe scorer");
+            continue;
+        }
+
+        pids[i] = fork();
+        if (pids[i] < 0) {
+            perror("hub: fork scorer");
+            continue;
+        }
+
+        if (pids[i] == 0) {
+            // copil => scorer, stdout -> pipe
+            close(pipes[i][0]);
+            dup2(pipes[i][1], STDOUT_FILENO);
+            close(pipes[i][1]);
+
+            execlp("./scorer", "scorer", districts[i], NULL);
+            perror("hub: exec scorer");
+            exit(1);
+        }
+
+        // parinte => inchidem capatul de scriere
+        close(pipes[i][1]);
+    }
+
+    // colectam outputul de la toti scorerii
+    printf("\n=== Raport workload ===\n");
+    for (int i = 0; i < count; i++) {
+        char line[BUF_SIZE];
+        int j = 0;
+        char c;
+
+        while (read(pipes[i][0], &c, 1) == 1) {
+            if (c == '\n' || j == BUF_SIZE - 2) {
+                line[j] = '\0';
+                j = 0;
+                if (strlen(line) == 0) break; // linie goala => scorer terminat
+                printf("  %s\n", line);
+            } else {
+                line[j++] = c;
+            }
+        }
+        close(pipes[i][0]);
+        waitpid(pids[i], NULL, 0);
+    }
+    printf("======================\n");
+}
+
+//bucla main
+void parse_and_run(char *input) {
+    input[strcspn(input, "\n")] = '\0';
  
+    if (strcmp(input, "start_monitor") == 0) {
+        cmd_start_monitor();
+        return;
+    }
+    if (strncmp(input, "calculate_scores", 16) == 0) {
+        char districts[MAX_DISTRICTS][64];
+        int count = 0;
+ 
+        // parsam districtele din restul liniei
+        char *token = strtok(input + 16, " ");
+        while (token && count < MAX_DISTRICTS) {
+            strncpy(districts[count], token, 63);
+            districts[count][63] = '\0';
+            count++;
+            token = strtok(NULL, " ");
+        }
+        cmd_calculate_scores(districts, count);
+        return;
+    }
+ 
+    if (strcmp(input, "stop_monitor") == 0) {
+        pid_t mon_pid = read_monitor_pid();
+        if (mon_pid < 0) {
+            printf("[hub] niciun monitor activ.\n");
+            return;
+        }
+        if (kill(mon_pid, SIGINT) == 0) {
+            printf("[hub] SIGINT trimis monitorului (PID=%d).\n", mon_pid);
+        } else {
+            perror("[hub] kill monitor");
+        }
+        return;
+    }
+ 
+    if (strcmp(input, "exit") == 0 || strcmp(input, "quit") == 0) {
+        // oprim si monitorul daca e pornit
+        pid_t mon_pid = read_monitor_pid();
+        if (mon_pid > 0) kill(mon_pid, SIGINT);
+        printf("[hub] iesire.\n");
+        exit(0);
+    }
+ 
+    if (strcmp(input, "help") == 0) {
+        printf("comenzi disponibile:\n");
+        printf("  start_monitor\n");
+        printf("  stop_monitor\n");
+        printf("  calculate_scores <district1> <district2> ...\n");
+        printf("  exit / quit\n");
+        return;
+    }
+ 
+    printf("[hub] comanda necunoscuta: %s\n", input);
+}
 
 int main(void) {
-    printf("=== city_hub ===\n");
+    printf("[city_hub]\n");
     printf("Tasteaza 'help' pentru lista de comenzi.\n\n");
  
     char input[512];
@@ -136,7 +250,7 @@ int main(void) {
  
         parse_and_run(input);
  
-        // curatam zombie-uri fara sa blocam
+        // curatam fara sa blocam
         waitpid(-1, NULL, WNOHANG);
     }
     return 0;
