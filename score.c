@@ -62,6 +62,13 @@ int main(int argc, char *argv[])
     }
 
     close(fd);
+
+    printf("Inspectorii si scorurile lor din districtul %s:\n", argv[1]);
+    for (int i = 0; i < num_inspectors; i++) {
+        printf("%s: %u\n", scores[i].name, scores[i].total_severity);
+    }
+    printf("\n");
+    fflush(stdout);
  
     return 0;
 }
