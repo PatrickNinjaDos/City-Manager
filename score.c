@@ -33,6 +33,29 @@ int main(int argc, char *argv[])
 
     char filepath[128];
     snprintf(filepath, sizeof(filepath), "%s/reports.dat", argv[1]);
+
+    InspectorScore scores[MAX_INSPECTORS] = {0};
+    int num_inspectors = 0;
+
+    Report report;
+
+    while(read(fd, &report, sizeof(Report)) == sizeof(Report)) {
+        int found = 0;
+        for (int i = 0; i < num_inspectors; i++) {
+            if (strcmp(scores[i].name, report.inspector_name) == 0) {
+                scores[i].total_severity += report.severity;
+                found = 1;
+                break;
+            }
+        }
+        if (!found && num_inspectors < MAX_INSPECTORS) {
+            strncpy(scores[num_inspectors].name, report.inspector_name, sizeof(scores[num_inspectors].name) - 1);
+            scores[num_inspectors].total_severity = report.severity;
+            num_inspectors++;
+        }
+    }
+
+    close(fd);
  
     int fd = open(filepath, O_RDONLY);
     if (fd < 0) {
